@@ -15,7 +15,7 @@ Traditional vulnerability scanners are overly technical, and manual security aud
 *   **Intelligence:** OpenAI `gpt-4o-mini` heavily sandboxed via system prompts to eliminate hallucinations and ensure framework compliance.
 
 ### Omnikon Declarations & Setup
-*   **Team Details:** Built by Team [Insert Team Name] (Contributors: [Your Name] & [Partner's Name]).
+*   **Team Details:** Built by Team [supernova] (Contributors: [Jenice Sahoo] & [Tanvi Agrawal]).
 *   **Generative AI Disclosure:** Generative AI tools were utilized during the ideation, structural planning, and architectural drafting phases of this project in compliance with hackathon rules.
 *   **Local Backend Setup:** Navigate to the `/backend` directory, add your `.env` file, install requirements, and execute `python main.py`.
 *   **Local Frontend Setup:** Navigate to the `/frontend` directory, execute `npm install`, and launch the server using `npm run dev`.
