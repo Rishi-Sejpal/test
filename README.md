@@ -1,21 +1,113 @@
-## CyberCISO | Omnikon Hackathon 2026
-> **Problem Statement:** Omni_CyberTech_2 (Affordable Cybersecurity Assessment)
-> **Domain:** 08 - Cybersecurity, Blockchain & Digital Trust
+# CyberCISO
 
-### Project Overview
-Traditional vulnerability scanners are overly technical, and manual security audits are too expensive for micro-enterprises. CyberCISO bridges this gap by providing an on-demand, conversational risk assessment. 
-*   **The Interview:** A frictionless chat interface that conducts a 5-minute operational security audit.
-*   **The Engine:** A custom token-routing backend that intelligently compresses prompts to maintain zero-cost inference.
-*   **The Output:** An actionable, jargon-free security roadmap mapped to NIST CSF and CIS Controls.
+A web-based, on-demand "Virtual CISO" that runs short, adaptive, plain-language chat interviews tailored to a small business's vertical. Outputs a security scorecard (A–F letter grade) and a 30-day prioritized remediation plan, strictly anchored to NIST CSF 2.0 and CIS Controls v8.
 
-### Architecture & Tech Stack
-*   **Frontend Interface:** Next.js and Tailwind CSS for a responsive, ephemeral session chat UI.
-*   **Backend API:** Python and FastAPI handling asynchronous routing and strict Pydantic data validation.
-*   **Optimization Layer:** Tiktoken (budget auditing) and LLMLingua-2 (semantic prompt compression) to prevent rate limits.
-*   **Intelligence:** OpenAI `gpt-4o-mini` heavily sandboxed via system prompts to eliminate hallucinations and ensure framework compliance.
+## Tech Stack
 
-### Omnikon Declarations & Setup
-*   **Team Details:** Built by Team [supernova] (Contributors: [Jenice Sahoo] & [Tanvi Agrawal]).
-*   **Generative AI Disclosure:** Generative AI tools were utilized during the ideation, structural planning, and architectural drafting phases of this project in compliance with hackathon rules.
-*   **Local Backend Setup:** Navigate to the `/backend` directory, add your `.env` file, install requirements, and execute `python main.py`.
-*   **Local Frontend Setup:** Navigate to the `/frontend` directory, execute `npm install`, and launch the server using `npm run dev`.
+- **Frontend**: Next.js + Tailwind CSS → Vercel
+- **Backend**: Python + FastAPI → Render/Railway
+- **AI**: OpenAI `gpt-4o-mini`, `tiktoken` token counting, `llmlingua` prompt compression
+
+## Architecture
+
+1. User message → Next.js chat UI
+2. Next.js sends message + hidden system prompt → FastAPI
+3. FastAPI counts tokens via `tiktoken`
+4. If count > threshold, compress via `llmlingua` down to target budget
+5. Send optimized prompt → `gpt-4o-mini`
+6. Return response → Next.js renders
+
+## Project Structure
+
+```
+CyberCISO/
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── api/
+│   │   │   └── chat.py
+│   │   ├── core/
+│   │   │   ├── config.py
+│   │   │   ├── openai_client.py
+│   │   │   ├── token_counter.py
+│   │   │   └── prompt_compressor.py
+│   │   ├── models/
+│   │   │   └── schemas.py
+│   │   └── prompts/
+│   │       └── system_prompt.py
+│   ├── tests/
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── lib/
+│   │   └── types/
+│   ├── package.json
+│   ├── tailwind.config.js
+│   └── Dockerfile
+├── .env.example
+└── README.md
+```
+
+## Getting Started
+
+### Backend
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp ../.env.example .env
+# Edit .env with your OpenAI API key
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+cp ../.env.example .env.local
+# Edit .env.local with NEXT_PUBLIC_API_URL=http://localhost:8000
+npm run dev
+```
+
+## Features
+
+- Dynamic branching interview tailored per vertical (retail, healthcare clinic, professional services)
+- Structured scorecard output with 30-day remediation plan
+- JSON schema for reliable frontend rendering
+- System prompt enforces NIST CSF 2.0 / CIS Controls v8 bound output
+- Zero-persistence: sensitive data not stored in DB; conversation state client-side + short-lived server memory
+- Robust error handling for OpenAI failures/rate limits/timeouts
+- Secrets via env vars; input validation/sanitization server-side
+- Type-safe: TypeScript frontend, type hints + Pydantic backend
+- Mobile-responsive UI
+- Mock OpenAI response mode for local dev (runs without live API key)
+- PDF export; results view-only in-browser
+
+## Verticals (Launch)
+
+1. Retail
+2. Healthcare Clinic
+3. Professional Services
+
+## Scorecard Sub-categories (Equally Weighted)
+
+1. Access Control
+2. Data Backup
+3. Network Security
+4. Email/Phishing Readiness
+5. Incident Response
+
+## Interview Length
+
+~8–12 adaptive questions
+
+## Deployment
+
+- Frontend: Vercel
+- Backend: Render or Railway
