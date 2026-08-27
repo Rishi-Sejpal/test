@@ -13,8 +13,19 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `HTTP error ${response.status}`);
+    const text = await response.text().catch(() => '');
+    let detail = `HTTP ${response.status}`;
+    try {
+      const error = JSON.parse(text);
+      if (typeof error.detail === 'string') detail = error.detail;
+      else if (Array.isArray(error.detail)) detail = error.detail.map((d: any) => d.msg || JSON.stringify(d)).join('; ');
+      else if (error.detail) detail = JSON.stringify(error.detail);
+      else if (text) detail = text.slice(0, 500);
+    } catch {
+      if (text) detail = text.slice(0, 500);
+    }
+    // Include status so Vercel 500 HTML is not swallowed as "Unknown error"
+    throw new Error(`${detail} (status ${response.status})`);
   }
 
   return response.json();
