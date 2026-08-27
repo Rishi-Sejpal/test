@@ -1,9 +1,10 @@
 import { ChatRequest, ChatResponse, ScorecardResponse } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 export async function sendChatMessage(request: ChatRequest): Promise<ChatResponse> {
-  const response = await fetch(`${API_BASE}/api/v1/chat`, {
+  const base = API_BASE || '';
+  const response = await fetch(`${base}/api/v1/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -20,7 +21,8 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
 }
 
 export async function healthCheck(): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE}/health`);
+  const base = API_BASE || '';
+  const response = await fetch(`${base}/health`);
   if (!response.ok) {
     throw new Error('Health check failed');
   }

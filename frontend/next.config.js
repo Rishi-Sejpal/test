@@ -5,12 +5,20 @@ const nextConfig = {
     domains: [],
   },
   async rewrites() {
-    return [
-      {
-        source: '/api/backend/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/:path*`,
-      },
-    ];
+    // In local dev, proxy /api to backend so same-domain fetch works
+    if (!process.env.NEXT_PUBLIC_API_URL) {
+      return [
+        {
+          source: '/api/:path*',
+          destination: 'http://localhost:8000/api/:path*',
+        },
+        {
+          source: '/health',
+          destination: 'http://localhost:8000/health',
+        },
+      ];
+    }
+    return [];
   },
 };
 

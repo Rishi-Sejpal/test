@@ -1,12 +1,144 @@
 'use client';
 
-import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Send, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
+import { Send, Shield, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import Link from 'next/link';
 import { ChatMessage, ChatRequest, Vertical, ScorecardResponse } from '@/types';
 import { sendChatMessage } from '@/lib/api';
-import { cn, formatVertical, getGradeColor, getPriorityColor, formatCategory, generateSessionId } from '@/lib/utils';
+import { cn, formatVertical, generateSessionId } from '@/lib/utils';
 import { exportScorecardToPDF } from '@/lib/pdf';
 import ScorecardView from './ScorecardView';
+
+const FIRST_QUESTIONS: Record<Vertical, string> = {
+  retail: 'How many employees access your point-of-sale systems and inventory databases?',
+  healthcare_clinic: 'How many staff members access your electronic health records (EHR) system?',
+  professional_services: 'How many team members access client confidential data on a regular basis?',
+};
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/<think>[\s\S]*?<\/think>\s*/gi, '')
+    .replace(/<thinking>[\s\S]*?<\/thinking>\s*/gi, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    .replace(/`(.*?)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[-*+]\s+/gm, '')
+    .trim();
+}
+
+function playNotificationSound() {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex gap-3 message-enter">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-md shadow-primary-500/20">
+        <Shield className="w-4 h-4 text-white" />
+      </div>
+      <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-md px-5 py-3.5 shadow-sm">
+        <div className="flex items-center gap-1.5">
+          <div className="typing-dot w-2 h-2 rounded-full bg-primary-400" />
+          <div className="typing-dot w-2 h-2 rounded-full bg-primary-400" />
+          <div className="typing-dot w-2 h-2 rounded-full bg-primary-400" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VerticalPicker({ onSelect }: { onSelect: (v: Vertical) => void }) {
+  return (
+    <div className="min-h-screen hero-mesh hero-grid">
+      <div className="min-h-screen flex flex-col">
+        <header className="px-6 py-5">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-gray-600 transition-colors text-sm">
+                <ArrowLeft className="w-4 h-4" />
+                Back
+              </Link>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Secure & Private
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 flex items-center justify-center px-6 py-12">
+          <div className="max-w-4xl w-full">
+            <div className="text-center mb-14 opacity-0 animate-fade-in-up">
+              <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                Select your business
+              </h1>
+              <p className="text-lg text-gray-500 max-w-xl mx-auto leading-relaxed">
+                We'll tailor the assessment to your industry's specific risks and compliance requirements.
+              </p>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-5 max-w-3xl mx-auto mb-12">
+              {([
+                { id: 'retail' as Vertical, label: 'Retail', desc: 'POS systems, inventory management, payment networks, seasonal staff onboarding', icon: '🛍️' },
+                { id: 'healthcare_clinic' as Vertical, label: 'Healthcare Clinic', desc: 'EHR systems, PHI handling, HIPAA compliance, medical device security', icon: '🏥' },
+                { id: 'professional_services' as Vertical, label: 'Professional Services', desc: 'Client data protection, cloud applications, IP safeguarding, encrypted comms', icon: '💼' },
+              ]).map(({ id, label, desc, icon }, idx) => (
+                <button
+                  key={id}
+                  onClick={() => onSelect(id)}
+                  className="vertical-card group p-7 text-left border border-gray-200/80 rounded-2xl bg-white/80 backdrop-blur-sm opacity-0 animate-fade-in-up"
+                  style={{ animationDelay: `${0.1 + idx * 0.1}s` }}
+                >
+                  <div className="text-3xl mb-4">{icon}</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-gray-900 group-hover:text-primary-600 transition-colors text-lg">
+                      {label}
+                    </span>
+                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-primary-500 group-hover:translate-x-1 transition-all duration-200" />
+                  </div>
+                  <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-5 text-sm text-gray-400 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                NIST CSF 2.0
+              </div>
+              <div className="w-1 h-1 rounded-full bg-gray-300" />
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                CIS Controls v8
+              </div>
+              <div className="w-1 h-1 rounded-full bg-gray-300" />
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                ~10 minutes
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
 
 interface ChatInterfaceProps {
   initialVertical?: Vertical;
@@ -21,6 +153,7 @@ export default function ChatInterface({ initialVertical }: ChatInterfaceProps) {
   const [scorecard, setScorecard] = useState<ScorecardResponse | null>(null);
   const [interviewComplete, setInterviewComplete] = useState(false);
   const [sessionId] = useState(() => generateSessionId());
+  const prevMsgCountRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -34,6 +167,16 @@ export default function ChatInterface({ initialVertical }: ChatInterfaceProps) {
 
   useEffect(() => {
     inputRef.current?.focus();
+  }, [messages]);
+
+  useEffect(() => {
+    if (messages.length > prevMsgCountRef.current) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg?.role === 'assistant') {
+        playNotificationSound();
+      }
+    }
+    prevMsgCountRef.current = messages.length;
   }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,12 +201,27 @@ export default function ChatInterface({ initialVertical }: ChatInterfaceProps) {
 
       const response = await sendChatMessage(request);
 
-      if (response.scorecard) {
-        setScorecard(response.scorecard);
+      // Fallback: if backend returned JSON as text (e.g. wrapped in ```json fences), parse it client-side
+      let sc = response.scorecard;
+      if (!sc && response.response) {
+        try {
+          let raw = response.response.trim();
+          if (raw.startsWith('```')) {
+            raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+          }
+          if (raw.startsWith('{')) {
+            const parsed = JSON.parse(raw);
+            if (parsed.overall_grade && parsed.sub_categories) sc = parsed as ScorecardResponse;
+          }
+        } catch {}
+      }
+
+      if (sc) {
+        setScorecard(sc);
         setInterviewComplete(true);
-        setVertical(response.scorecard.vertical);
+        setVertical(sc.vertical);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: response.response }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: stripMarkdown(response.response) }]);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -73,11 +231,17 @@ export default function ChatInterface({ initialVertical }: ChatInterfaceProps) {
     }
   };
 
-  const handleVerticalSelect = (selectedVertical: Vertical) => {
+  const handleVerticalSelect = useCallback((selectedVertical: Vertical) => {
     setVertical(selectedVertical);
-    const msg = `I'll tailor the assessment for **${formatVertical(selectedVertical)}**. Let's begin.`;
-    setMessages(prev => [...prev, { role: 'user', content: selectedVertical }, { role: 'assistant', content: msg }]);
-  };
+    const name = formatVertical(selectedVertical);
+    const welcomeMsg = `Sure! Here is your ${name} assessment.`;
+    const firstQuestion = FIRST_QUESTIONS[selectedVertical];
+    setMessages([
+      { role: 'user', content: `I want an assessment for ${name}` },
+      { role: 'assistant', content: welcomeMsg },
+      { role: 'assistant', content: firstQuestion },
+    ]);
+  }, []);
 
   const handleRestart = () => {
     setMessages([]);
@@ -90,50 +254,19 @@ export default function ChatInterface({ initialVertical }: ChatInterfaceProps) {
   const handleDownloadPDF = async () => {
     if (!scorecard) return;
     try {
-      await exportScorecardToPDF(scorecard, 'scorecard-content');
+      await exportScorecardToPDF(scorecard);
     } catch (err) {
       setError('Failed to generate PDF');
     }
   };
 
   if (!vertical && !interviewComplete) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-          <div className="text-center mb-8">
-            <img src="/images/logo.svg" alt="CyberCISO" className="w-24 h-24 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold text-gray-900">CyberCISO</h1>
-            <p className="text-gray-600 mt-2">Virtual CISO for Small Business</p>
-          </div>
-          <p className="text-gray-600 mb-6 text-center">
-            Select your business vertical to begin a tailored cybersecurity assessment.
-          </p>
-          <div className="space-y-3">
-            {(['retail', 'healthcare_clinic', 'professional_services'] as Vertical[]).map(v => (
-              <button
-                key={v}
-                onClick={() => handleVerticalSelect(v)}
-                className="w-full p-4 text-left border border-gray-200 rounded-xl hover:border-primary-500 hover:bg-primary-50 transition-colors group"
-              >
-                <div className="font-medium text-gray-900 group-hover:text-primary-600">
-                  {formatVertical(v)}
-                </div>
-                <div className="text-sm text-gray-500 mt-1">
-                  {v === 'retail' && 'POS, inventory, payment networks, seasonal staff'}
-                  {v === 'healthcare_clinic' && 'EHR, PHI, HIPAA, medical devices, BAAs'}
-                  {v === 'professional_services' && 'Client data, cloud services, IP protection, encrypted comms'}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <VerticalPicker onSelect={handleVerticalSelect} />;
   }
 
   if (interviewComplete && scorecard) {
     return (
-      <div id="scorecard-content" className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50">
         <ScorecardView
           scorecard={scorecard}
           onRestart={handleRestart}
@@ -144,57 +277,66 @@ export default function ChatInterface({ initialVertical }: ChatInterfaceProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white flex flex-col">
+      <header className="glass-strong border-b border-gray-200/50 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/images/logo.svg" alt="CyberCISO" className="w-10 h-10" />
+            <div className="relative">
+              <img src="/images/logo.svg" alt="CyberCISO" className="w-9 h-9 relative z-10" />
+              <div className="absolute inset-0 bg-primary-400/15 blur-lg rounded-full" />
+            </div>
             <div>
-              <h1 className="font-bold text-gray-900">CyberCISO</h1>
-              <p className="text-xs text-gray-500">Virtual CISO Assessment</p>
+              <h1 className="font-bold text-gray-900 text-sm tracking-tight">CyberCISO</h1>
+              <p className="text-[11px] text-gray-400">Virtual CISO Assessment</p>
             </div>
           </div>
           {vertical && (
-            <span className="px-3 py-1 bg-primary-50 text-primary-700 text-sm font-medium rounded-full">
-              {formatVertical(vertical)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full border border-primary-100">
+                {formatVertical(vertical)}
+              </span>
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Secure
+              </div>
+            </div>
           )}
         </div>
       </header>
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-6 flex flex-col">
-        <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+        <div className="flex-1 overflow-y-auto space-y-5 pb-4">
           {messages.map((msg, idx) => (
             <div
               key={idx}
-              className={cn('flex gap-3', msg.role === 'user' && 'justify-end')}
+              className={cn(
+                'flex gap-3 message-enter',
+                msg.role === 'user' && 'justify-end'
+              )}
             >
+              {msg.role === 'assistant' && (
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-md shadow-primary-500/20 mt-0.5">
+                  <Shield className="w-4 h-4 text-white" />
+                </div>
+              )}
               <div
                 className={cn(
-                  'max-w-[80%] rounded-2xl px-4 py-3',
+                  'max-w-[80%] rounded-2xl px-4 py-3 shadow-sm',
                   msg.role === 'user'
-                    ? 'bg-primary-600 text-white rounded-br-md'
-                    : 'bg-white text-gray-900 border border-gray-200 rounded-bl-md shadow-sm'
+                    ? 'bg-gradient-to-br from-primary-600 to-primary-700 text-white bubble-user shadow-primary-600/20'
+                    : 'bg-white text-gray-800 border border-gray-100 bubble-assistant'
                 )}
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</p>
               </div>
             </div>
           ))}
 
-          {isLoading && (
-            <div className="flex gap-3 justify-start">
-              <div className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-2xl rounded-bl-md shadow-sm">
-                <Loader2 className="w-5 h-5 text-primary-600 animate-spin" />
-                <span className="text-gray-500 text-sm">CyberCISO is thinking...</span>
-              </div>
-            </div>
-          )}
+          {isLoading && <TypingIndicator />}
 
           {error && (
-            <div className="flex gap-3 justify-center">
-              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <div className="flex gap-3 justify-center message-enter">
+              <div className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
                 <span>{error}</span>
               </div>
             </div>
@@ -203,8 +345,8 @@ export default function ChatInterface({ initialVertical }: ChatInterfaceProps) {
           <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={handleSubmit} className="border-t border-gray-200 pt-4 bg-white sticky bottom-0">
-          <div className="flex gap-2">
+        <form onSubmit={handleSubmit} className="border-t border-gray-100 pt-4 bg-white/80 backdrop-blur-sm sticky bottom-0">
+          <div className="flex gap-2.5 items-end">
             <textarea
               ref={inputRef}
               value={input}
@@ -218,22 +360,24 @@ export default function ChatInterface({ initialVertical }: ChatInterfaceProps) {
               placeholder="Type your response..."
               disabled={isLoading}
               rows={1}
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none max-h-32"
+              className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-300 resize-none max-h-32 text-[15px] placeholder:text-gray-400 transition-all"
               aria-label="Chat input"
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
               className={cn(
-                'px-6 py-3 rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-                'bg-primary-600 text-white hover:bg-primary-700'
+                'p-3 rounded-xl transition-all duration-200 flex-shrink-0',
+                input.trim() && !isLoading
+                  ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/25 hover:shadow-xl hover:shadow-primary-500/30 hover:scale-[1.02] active:scale-[0.98]'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               )}
               aria-label="Send message"
             >
               <Send className="w-5 h-5" />
             </button>
           </div>
-          <p className="text-xs text-gray-500 text-center mt-2">
+          <p className="text-[11px] text-gray-400 text-center mt-2.5">
             Press Enter to send, Shift+Enter for new line
           </p>
         </form>
