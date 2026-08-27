@@ -134,8 +134,13 @@ async def chat(req: ChatRequest):
                 kwargs["response_format"] = {"type": "json_object"}
             res = await client.chat.completions.create(**kwargs)
             content = (res.choices[0].message.content or "").strip()
+            # strip <think> blocks from qwen/qwq reasoning models
+            import re
+            content = re.sub(r"<think>.*?</think>\s*", "", content, flags=re.DOTALL)
+            content = re.sub(r"<thinking>.*?</thinking>\s*", "", content, flags=re.DOTALL)
+            content = content.strip()
             # try scorecard parse
-            import json, re
+            import json
             raw = content
             if raw.startswith("```"):
                 raw = re.sub(r"^```(?:json)?\s*", "", raw)
