@@ -2,12 +2,7 @@
   "builds": [
     {
       "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "includeFiles": "backend/**",
-        "maxLambdaSize": "15mb",
-        "runtime": "python3.12"
-      }
+      "use": "@vercel/python"
     },
     {
       "src": "frontend/next.config.js",
@@ -23,10 +18,5 @@
       "src": "/(.*)",
       "dest": "frontend/$1"
     }
-  ],
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "backend/**"
-    }
-  }
+  ]
 }
